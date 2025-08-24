@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Discord Bot Controller</title>
+    <style>
+        body { font-family: ui-sans-serif, system-ui, -apple-system; margin: 16px; }
+        .row { display:flex; gap:12px; margin-bottom:12px; align-items:center; }
+        input, textarea { width: 100%; padding: 8px; font-size: 14px; }
+        label { width: 160px; font-weight:600; }
+        button { padding: 10px 16px; font-weight:600; cursor:pointer; }
+        #logs { background:#0b1020; color:#cde3ff; height: 240px; overflow:auto; padding:10px; border-radius:8px; }
+        .cols { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+        .hint { color:#555; font-size:12px; }
+    </style>
+</head>
+<body>
+<h1>Discord Bot Controller</h1>
+
+<div class="cols">
+    <div class="row"><label>Rows (A..)</label><input id="rows" type="number" min="1" value="5"/></div>
+    <div class="row"><label>Cols (1..)</label><input id="cols" type="number" min="1" value="4"/></div>
+</div>
+
+<div class="row">
+    <label>Account</label><input id="accName" placeholder="Account name"/>
+    <label>X</label><input id="x" type="number" style="width:80px"/>
+    <label>Y</label><input id="y" type="number" style="width:80px"/>
+    <label>W</label><input id="w" type="number" style="width:80px"/>
+    <label>H</label><input id="h" type="number" style="width:80px"/>
+    <button id="add">Add</button>
+</div>
+
+<table id="accTable">
+    <thead><tr><th>Account</th><th>X</th><th>Y</th><th>W</th><th>H</th><th>❌</th></tr></thead>
+    <tbody></tbody>
+</table>
+
+<div class="row">
+    <button id="save">Save Config</button>
+    <button id="start">Start Bot</button>
+    <button id="stop">Stop Bot</button>
+</div>
+
+<h2>Logs</h2>
+<pre id="logs"></pre>
+
+<script>
+    const $ = (id) => document.getElementById(id);
+    let accounts = {};
+
+    function renderTable(){
+        const tbody = $('accTable').querySelector("tbody");
+        tbody.innerHTML = "";
+        Object.entries(accounts).forEach(([name, obj])=>{
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${name}</td><td>${obj.x}</td><td>${obj.y}</td><td>${obj.w}</td><td>${obj.h}</td>
+        <td><button data-name="${name}">❌</button></td>`;
+            tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll("button").forEach(btn=>{
+            btn.onclick = ()=>{
+                delete accounts[btn.dataset.name];
+                renderTable();
+            };
+        });
+    }
+
+    function appendLog(msg){
+        const el = $('logs');
+        el.textContent += msg + (msg.endsWith('\n')?'':'\n');
+        el.scrollTop = el.scrollHeight;
+    }
+
+    bridge.onLog((msg)=>appendLog(msg));
+
+    $('add').onclick = ()=>{
+        const name = $('accName').value.trim();
+        if(!name) return alert("Nhập tên account");
+        accounts[name] = {
+            x:Number($('x').value)||0,
+            y:Number($('y').value)||0,
+            w:Number($('w').value)||0,
+            h:Number($('h').value)||0
+        };
+        renderTable();
+        $('accName').value = $('x').value = $('y').value = $('w').value = $('h').value = "";
+    };
+
+    $('save').onclick = async () => {
+        try {
+            const coords = $('coords').value.trim() ? JSON.parse($('coords').value) : {};
+            const res = await bridge.saveConfig({
+                rows: $('rows').value,
+                cols: $('cols').value,
+                coords
+            });
+            appendLog(res.ok ? '✅ Saved accounts.json' : '❌ Save failed');
+        } catch (e) {
+            appendLog('❌ Invalid JSON in Coords');
+        }
+    };
+
+    $('start').onclick = async () => {
+        const res = await bridge.startBot(); // không cần token nữa
+        appendLog(res.ok ? '🚀 Bot starting…' : '❌ ' + (res.message||'Start failed'));
+    };
+
+    $('stop').onclick = async () => {
+        const res = await bridge.stopBot();
+        appendLog(res.ok ? '🛑 Bot stopped' : 'ℹ️ ' + (res.message||''));
+    };
+</script>
+
+<h2>Test List</h2>
+<ul id="test-list" tabindex="0" style="list-style:none; padding:0; max-width:400px; border:1px solid #ddd; border-radius:6px;">
+    <li><label><input type="checkbox"/> Item 1</label></li>
+    <li><label><input type="checkbox"/> Item 2</label></li>
+    <li><label><input type="checkbox"/> Item 3</label></li>
+    <li><label><input type="checkbox"/> Item 4</label></li>
+    <li><label><input type="checkbox"/> Item 5</label></li>
+    <li><label><input type="checkbox"/> Item 6</label></li>
+    <li><label><input type="checkbox"/> Item 7</label></li>
+    <li><label><input type="checkbox"/> Item 8</label></li>
+    <li><label><input type="checkbox"/> Item 9</label></li>
+    <li><label><input type="checkbox"/> Item 10</label></li>
+    <li><label><input type="checkbox"/> Item 11</label></li>
+    <li><label><input type="checkbox"/> Item 12</label></li>
+    <li><label><input type="checkbox"/> Item 13</label></li>
+    <li><label><input type="checkbox"/> Item 14</label></li>
+    <li><label><input type="checkbox"/> Item 15</label></li>
+    <li><label><input type="checkbox"/> Item 16</label></li>
+    <li><label><input type="checkbox"/> Item 17</label></li>
+    <li><label><input type="checkbox"/> Item 18</label></li>
+    <li><label><input type="checkbox"/> Item 19</label></li>
+    <li><label><input type="checkbox"/> Item 20</label></li>
+</ul>
+
+<style>
+    #test-list li { padding:6px 10px; cursor:pointer; }
+    #test-list li.active { background:#0b1020; color:#cde3ff; }
+</style>
+
+<script>
+    (function(){
+        const list = document.getElementById("test-list");
+        const items = [...list.querySelectorAll("li")];
+        let index = 0;
+
+        function updateActive(){
+            items.forEach((li,i)=>li.classList.toggle("active", i===index));
+        }
+        updateActive();
+
+        list.addEventListener("keydown", (e)=>{
+            if(e.key==="ArrowDown"){
+                e.preventDefault();
+                if(index < items.length - 1){   // chặn loop
+                    index++;
+                    updateActive();
+                }
+            }
+            if(e.key==="ArrowUp"){
+                e.preventDefault();
+                if(index > 0){   // chặn loop
+                    index--;
+                    updateActive();
+                }
+            }
+            if(e.key===" " || e.key==="Spacebar"){
+                e.preventDefault();
+                const cb = items[index].querySelector("input[type=checkbox]");
+                cb.checked = !cb.checked;
+            }
+        });
+
+        // cho phép click chuột đổi focus
+        items.forEach((li,i)=>{
+            li.addEventListener("click", ()=>{
+                index=i;
+                updateActive();
+                list.focus();
+            });
+        });
+    })();
+</script>
+</body>
+</html>

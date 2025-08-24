@@ -1,0 +1,17 @@
+{
+  "name": "discord-oslink-controller",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "bot": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "electron": "^31.3.0",
+    "jimp": "^0.22.12",
+    "robotjs": "^0.6.0",
+    "screenshot-desktop": "^1.15.0"
+  }
+}
