@@ -1,25 +1,26 @@
 const { Client, GatewayIntentBits } = require('discord.js');
 const robot = require('robotjs');
 const screenshot = require('screenshot-desktop');
+const fs = require('fs');
+const path = require('path');
+const sharp = require("sharp");
+
 
 const TOKEN = "MTQwMTUwNDk5ODcwMDg3NTkwOA.GH3_ig.6iWp8BZcbcivcFLtrHgGxf8GJRtxfFj8HyBWxQ";
+const configFile = path.join(__dirname, 'accounts.json');
 
 // Kích thước bảng account (5 hàng x 4 cột)
-const ROWS = 5;
-const COLS = 4;
+const ROWS = 3;
+const COLS = 2;
 const MAX_ACCOUNTS = ROWS * COLS;
 
-// Map tọa độ màn hình cho từng account (ví dụ giả định)
-const accountCoordinates = {
-    A1: { x: 100, y: 200, w: 300, h: 200 },
-    A2: { x: 420, y: 200, w: 300, h: 200 },
-    A3: { x: 740, y: 200, w: 300, h: 200 },
-    A4: { x: 1060, y: 200, w: 300, h: 200 },
-
-    B1: { x: 100, y: 420, w: 300, h: 200 },
-    B2: { x: 420, y: 420, w: 300, h: 200 },
-    // ... bạn tự điền tiếp cho đến E4
-};
+// Load accounts.json
+let accounts = {};
+if (fs.existsSync(configFile)) {
+    const data = JSON.parse(fs.readFileSync(configFile));
+    accounts = data.accounts || {};
+    console.log("📂 Loaded accounts.json:", accounts);
+}
 
 // Convert A1 → index
 function getIndex(label) {
@@ -50,18 +51,21 @@ async function selectAccount(label) {
     }
 }
 
-// Screenshot account theo tọa độ
+// Chụp màn hình account theo tọa độ
 async function captureAccount(label) {
-    const coord = accountCoordinates[label];
-    if (!coord) throw new Error("Không tìm thấy tọa độ cho " + label);
+    const coord = accounts[label];
+    if (!coord) throw new Error("❌ Không tìm thấy tọa độ cho " + label);
 
-    await screenshot({
-        format: "png",
-        screen: 0,
-        filename: `${label}.png`,
-    });
+    // Chụp toàn màn hình
+    const img = await screenshot({ format: "png" });
 
-    return `${label}.png`;
+    // Crop theo tọa độ account
+    const outPath = path.join(__dirname, `${label}.png`);
+    await sharp(img)
+        .extract({ left: coord.x, top: coord.y, width: coord.w, height: coord.h })
+        .toFile(outPath);
+
+    return outPath;
 }
 
 // =============== DISCORD BOT ===============
@@ -95,7 +99,7 @@ client.on("messageCreate", async (message) => {
             await selectAccount(label);
             // Tick/untick
             robot.keyTap("space");
-            message.reply(`Đã start account ${label}`);
+            await message.reply(`Đã start account ${label}`);
         }
 
         if (cmd === "!stop" && args[1]) {
@@ -104,20 +108,20 @@ client.on("messageCreate", async (message) => {
             await selectAccount(label);
             // Tick/untick
             robot.keyTap("space");
-            message.reply(`Đã stop account ${label}`);
+            await message.reply(`Đã stop account ${label}`);
         }
 
         if (cmd === "!screenshot" && args[1]) {
             const label = args[1].toUpperCase();
             const filePath = await captureAccount(label);
             await message.reply({
-                content: `Ảnh chụp màn hình của ${label}`,
+                content: `📸 Ảnh chụp màn hình của ${label}`,
                 files: [filePath],
             });
         }
     } catch (err) {
         console.error(err);
-        message.reply("⚠️ Có lỗi xảy ra: " + err.message);
+        await message.reply("⚠️ Có lỗi xảy ra: " + err.message);
     }
 });
 

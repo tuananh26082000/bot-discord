@@ -44,11 +44,10 @@ app.on('activate', () => {
 
 // ---- IPC ----
 ipcMain.handle('save-config', async (_evt, payload) => {
-    // payload: { accounts: { AccountName: {x,y,w,h}, ... } }
-    fs.writeFileSync(path.join(__dirname, 'accounts.json'), JSON.stringify({
-        accounts: payload.accounts || {}
-    }, null, 2));
-    return {ok: true};
+    // payload: { accounts }
+    const file = path.join(__dirname, 'accounts.json');
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+    return { ok: true };
 });
 
 ipcMain.handle('start-bot', async (_evt) => {
