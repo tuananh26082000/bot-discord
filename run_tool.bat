@@ -7,7 +7,16 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
+:: Chạy với Node từ NVM
+setlocal
+:: Thay 21.7.3 bằng version bạn dùng trong nvm
+for /f "tokens=*" %%i in ('nvm root') do set NVM_HOME=%%i
+set NVM_SYMLINK=%NVM_HOME%\v21.7.3
+set PATH=%NVM_SYMLINK%;%NVM_SYMLINK%\node_modules\npm\bin;%PATH%
+
 :: Chạy npm start
 cd /d %~dp0
-npm start
+call npm start
+
+endlocal
 pause
