@@ -11,7 +11,6 @@
     "discord.js": "^14.15.3",
     "electron": "^31.7.7",
     "jimp": "^0.22.12",
-    "robotjs": "^0.6.0",
     "screenshot-desktop": "^1.15.2",
     "sharp": "^0.34.3"
   }
