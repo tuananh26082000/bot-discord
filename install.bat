@@ -1,53 +1,43 @@
 @echo off
-:: =============================
-:: Install Script for Project
-:: =============================
+setlocal enabledelayedexpansion
 
-:: Kiểm tra quyền admin
+:: ==== Check for Admin rights ====
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo Yêu cầu chạy file này bằng quyền Administrator...
+    echo ⚠️ Please run install.bat as Administrator...
     powershell -Command "Start-Process '%~f0' -Verb RunAs"
     exit /b
 )
 
-echo =============================
-echo 1. Cài đặt NVM for Windows (nếu chưa có)
-echo =============================
+echo ================================================
+echo 🚀 Starting Discord Bot Controller installation
+echo ================================================
 
-:: Kiểm tra nvm
+:: ==== Check NVM ====
 where nvm >nul 2>&1
 if %errorLevel% neq 0 (
-    echo NVM chưa được cài. Đang tải về...
-    powershell -Command "Invoke-WebRequest -Uri https://github.com/coreybutler/nvm-windows/releases/download/1.1.12/nvm-setup.exe -OutFile nvm-setup.exe"
-    echo Chạy cài đặt NVM...
-    start /wait nvm-setup.exe
-    del nvm-setup.exe
-) else (
-    echo NVM đã được cài.
+    echo ⚠️ NVM is not installed. Please install NVM for Windows first:
+    echo 👉 https://github.com/coreybutler/nvm-windows/releases
+    pause
+    exit /b
 )
 
-echo =============================
-echo 2. Cài đặt Node.js v21.7.3
-echo =============================
+:: ==== Install Node.js v20.19.4 ====
+echo 👉 Installing Node.js v20.19.4 via NVM...
+nvm install 20.19.4
+nvm use 20.19.4
 
-nvm install 21.7.3
-nvm use 21.7.3
+:: ==== Install dependencies ====
+echo 👉 Installing required npm packages...
+call npm install discord.js electron jimp screenshot-desktop sharp
 
-echo =============================
-echo Node.js version:
-node -v
-echo NPM version:
-npm -v
+:: ==== Rebuild robotjs for Electron ====
+echo 👉 Rebuilding robotjs for Electron...
+call npm install robotjs --build-from-source --runtime=electron --target=31.7.7 --dist-url=https://electronjs.org/headers
 
-echo =============================
-echo 3. Cài dependencies npm
-echo =============================
+echo ================================================
+echo ✅ Installation completed successfully!
+echo You can now run the bot using: run.bat
+echo ================================================
 
-cd /d %~dp0
-npm install
-
-echo =============================
-echo Hoàn tất cài đặt!
-echo Bạn có thể chạy run.bat để khởi động project.
 pause
