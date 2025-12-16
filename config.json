@@ -1,0 +1,44 @@
+{
+  "token": "MTQ1MDUyNjY5ODgxMzY1MzA1Mw.GaYIR4.CwJg0BZYQHq2KozoPqKy_yAXnQMBVR2g1zOdpE",
+  "targetTitle": "Chrome",
+  "rows": 3,
+  "cols": 2,
+  "accounts": {
+    "A1": {
+      "x": 0,
+      "y": 0,
+      "w": 300,
+      "h": 200
+    },
+    "A2": {
+      "x": 0,
+      "y": 0,
+      "w": 300,
+      "h": 200
+    },
+    "B1": {
+      "x": 0,
+      "y": 0,
+      "w": 300,
+      "h": 200
+    },
+    "B2": {
+      "x": 0,
+      "y": 0,
+      "w": 300,
+      "h": 200
+    },
+    "C1": {
+      "x": 0,
+      "y": 0,
+      "w": 300,
+      "h": 200
+    },
+    "C2": {
+      "x": 0,
+      "y": 0,
+      "w": 300,
+      "h": 200
+    }
+  }
+}

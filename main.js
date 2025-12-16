@@ -1,73 +1,70 @@
-const {app, BrowserWindow, ipcMain} = require('electron');
+const isBot = process.env.IS_BOT === 'true' || process.argv.includes('--is-bot');
+if (isBot) {
+    require('./bot.js');
+    return;
+}
+
+const { app, BrowserWindow, ipcMain } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
-const {spawn} = require('child_process');
 const fs = require('fs');
 
-let win;
-let botProcess = null;
+const getConfigPath = () => path.join(app.getPath('userData'), 'config.json');
 
-function createWindow() {
+let win, bot;
+
+app.whenReady().then(()=>{
     win = new BrowserWindow({
-        width: 840,
-        height: 700,
-        webPreferences: {
-            contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js')
+        width: 900,
+        height: 720,
+        webPreferences:{
+            preload: path.join(__dirname,'preload.js'),
+            contextIsolation:true
         }
     });
     win.loadFile('index.html');
+});
 
-    win.on('closed', () => {
-        if (botProcess) {
-            botProcess.kill('SIGTERM');
-            botProcess = null;
+ipcMain.handle('save-config',(_,cfg)=>{
+    try {
+        const filePath = getConfigPath();
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
         }
-    });
-}
 
-app.whenReady().then(createWindow);
-
-app.on('before-quit', () => {
-    if (botProcess) {
-        botProcess.kill('SIGTERM');
-        botProcess = null;
+        fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2));
+        console.log("💾 Đã ghi file thành công tại:", filePath);
+        return { ok: true };
+    } catch (error) {
+        console.error("❌ Lỗi ghi file:", error);
+        return { ok: false, error: error.message };
     }
 });
 
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
-});
+ipcMain.handle('start-bot', () => {
+    if (bot) return { ok: false };
 
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+    bot = spawn(process.execPath, [
+        path.join(__dirname, 'bot.js'),
+        '--is-bot'
+    ], {
+        env: {
+            ...process.env,
+            IS_BOT: 'true'
+        }
+    });
 
-// ---- IPC ----
-ipcMain.handle('save-config', async (_evt, payload) => {
-    // payload: { accounts }
-    const file = path.join(__dirname, 'accounts.json');
-    fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+    bot.stdout.on('data', d => win.webContents.send('bot-log', d.toString()));
+    bot.stderr.on('data', d => win.webContents.send('bot-log', 'ERR ' + d));
+    bot.on('close', () => bot = null);
+
     return { ok: true };
 });
 
-ipcMain.handle('start-bot', async (_evt) => {
-    if (botProcess) return {ok: false, message: 'Bot is already running'};
-
-    botProcess = spawn(process.execPath, [path.join(__dirname, 'bot.js')]);
-
-    botProcess.stdout.on('data', d => win.webContents.send('bot-log', d.toString()));
-    botProcess.stderr.on('data', d => win.webContents.send('bot-log', `ERR: ${d.toString()}`));
-    botProcess.on('close', code => {
-        win.webContents.send('bot-log', `Bot exited with code ${code}`);
-        botProcess = null;
-    });
-
-    return {ok: true};
-});
-
-ipcMain.handle('stop-bot', async () => {
-    if (!botProcess) return {ok: false, message: 'Bot is not running'};
-    botProcess.kill();
-    botProcess = null;
-    return {ok: true};
+ipcMain.handle('stop-bot',()=>{
+    if (!bot) return {ok:false};
+    bot.kill();
+    bot=null;
+    return {ok:true};
 });

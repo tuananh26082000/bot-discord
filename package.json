@@ -5,13 +5,42 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "bot": "node bot.js"
+    "dist": "electron-builder"
   },
   "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
     "discord.js": "^14.15.3",
-    "electron": "^31.7.7",
-    "jimp": "^0.22.12",
+    "node-window-manager": "^2.2.4",
     "screenshot-desktop": "^1.15.2",
     "sharp": "^0.34.3"
+  },
+  "overrides": {
+    "node-abi": "3.51.0",
+    "undici": "5.28.4"
+  },
+  "devDependencies": {
+    "electron": "^22.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9"
+  },
+  "build": {
+    "appId": "com.rok.discordrokcontroller",
+    "productName": "Discord ROK Controller",
+    "files": [
+      "**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "mac": {
+      "icon": "rok.icns"
+    },
+    "asarUnpack": [
+      "**/node_modules/robotjs/**",
+      "**/node_modules/node-window-manager/**",
+      "**/*.node"
+    ]
   }
 }

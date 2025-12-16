@@ -1,128 +1,157 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const robot = require('robotjs');
-const screenshot = require('screenshot-desktop');
+const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const sharp = require("sharp");
+const { Client, GatewayIntentBits } = require('discord.js');
+const { keyboard, Key, mouse, screen } = require("@nut-tree-fork/nut-js");
+const screenshot = require('screenshot-desktop');
+const sharp = require('sharp');
+const { windowManager } = require('node-window-manager');
 
+// ==========================================================
+// 1. CẤU HÌNH HEADLESS & CHẶN CỬA SỔ
+// ==========================================================
 
-const TOKEN = "MTQwMTUwNDk5ODcwMDg3NTkwOA.GH3_ig.6iWp8BZcbcivcFLtrHgGxf8GJRtxfFj8HyBWxQ";
-const configFile = path.join(__dirname, 'accounts.json');
-
-// Kích thước bảng account (5 hàng x 4 cột)
-const ROWS = 3;
-const COLS = 2;
-const MAX_ACCOUNTS = ROWS * COLS;
-
-// Load accounts.json
-let accounts = {};
-if (fs.existsSync(configFile)) {
-    const data = JSON.parse(fs.readFileSync(configFile));
-    accounts = data.accounts || {};
-    console.log("📂 Loaded accounts.json:", accounts);
+// Kiểm tra quyền thực thi (phòng hờ chạy nhầm file)
+const isBot = process.env.IS_BOT === 'true' || process.argv.includes('--is-bot');
+if (!isBot) {
+    process.exit(0);
 }
 
-// Convert A1 → index
-function getIndex(label) {
-    const row = label[0].toUpperCase().charCodeAt(0) - "A".charCodeAt(0);
-    const col = parseInt(label[1]) - 1;
-    return row * COLS + col;
+// Chặn tuyệt đối việc đóng app khi không có cửa sổ (giữ bot chạy ngầm)
+app.on('window-all-closed', (e) => {
+    e.preventDefault();
+});
+
+// Cấu hình nut-js: Độ trễ giữa các phím để game kịp nhận diện
+keyboard.config.autoDelayMs = 50;
+
+// ==========================================================
+// 2. TẢI CẤU HÌNH (CONFIG)
+// ==========================================================
+const configPath = path.join(app.getPath('userData'), 'config.json');
+if (!fs.existsSync(configPath)) {
+    console.error('❌ Không tìm thấy file config.json');
+    process.exit(1);
 }
 
-// Reset con trỏ lên đầu danh sách
+const cfg = JSON.parse(fs.readFileSync(configPath));
+const { token, targetTitle, rows, cols, accounts } = cfg;
+const MAX = rows * cols;
+
+// ==========================================================
+// 3. CÁC HÀM ĐIỀU KHIỂN (HELPER FUNCTIONS)
+// ==========================================================
+
+function focusTarget() {
+    try {
+        windowManager.requestAccessibility();
+        const win = windowManager.getWindows().find(w => w.getTitle().includes(targetTitle));
+        if (!win) {
+            console.log(`⚠️ Không tìm thấy cửa sổ: ${targetTitle}`);
+            return false;
+        }
+        win.bringToTop();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 async function resetCursor() {
-    console.log("Max account: ", MAX_ACCOUNTS)
-    for (let i = 0; i < MAX_ACCOUNTS; i++) {
-        console.log("move up: ", i);
-        robot.keyTap("up");
-        await new Promise((r) => setTimeout(r, 30));
+    for (let i = 0; i < MAX; i++) {
+        await keyboard.pressKey(Key.Up);
+        await keyboard.releaseKey(Key.Up);
+        await new Promise(r => setTimeout(r, 20));
     }
 }
 
-// Chọn account bằng label (A1..E4)
 async function selectAccount(label) {
-    const index = getIndex(label);
-    console.log("index: ", index);
-    await resetCursor();
+    const row = label.charCodeAt(0) - 65;
+    const col = Number(label[1]) - 1;
+    const targetIdx = row * cols + col;
 
-    for (let i = 0; i < index; i++) {
-        robot.keyTap("down");
-        await new Promise((r) => setTimeout(r, 30));
+    await resetCursor();
+    for (let i = 0; i < targetIdx; i++) {
+        await keyboard.pressKey(Key.Down);
+        await keyboard.releaseKey(Key.Down);
+        await new Promise(r => setTimeout(r, 20));
     }
 }
 
-// Chụp màn hình account theo tọa độ
 async function captureAccount(label) {
-    const coord = accounts[label];
-    if (!coord) throw new Error("❌ Không tìm thấy tọa độ cho " + label);
+    const acc = accounts[label];
+    const rawPath = path.join(__dirname, `raw_${label}.png`);
+    const outPath = path.join(__dirname, `crop_${label}.png`);
 
-    // Chụp toàn màn hình
-    const img = await screenshot({ format: "png" });
-
-    // Crop theo tọa độ account
-    const outPath = path.join(__dirname, `${label}.png`);
-    await sharp(img)
-        .extract({ left: coord.x, top: coord.y, width: coord.w, height: coord.h })
+    await screenshot({ filename: rawPath });
+    await sharp(rawPath)
+        .extract({ left: acc.x, top: acc.y, width: acc.w, height: acc.h })
         .toFile(outPath);
 
+    if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
     return outPath;
 }
 
-// =============== DISCORD BOT ===============
+// ==========================================================
+// 4. KẾT NỐI DISCORD & XỬ LÝ LỆNH
+// ==========================================================
+
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
-client.once("ready", () => {
-    console.log(`✅ Bot logged in as ${client.user.tag}`);
-});
+client.on('messageCreate', async msg => {
+    if (msg.author.bot) return;
 
-client.on("messageCreate", async (message) => {
-    if (message.author.bot) return;
-
-    const args = message.content.trim().split(" ");
-    const cmd = args[0];
+    const args = msg.content.trim().split(' ');
+    const cmd = args[0].toLowerCase();
+    const label = args[1]?.toUpperCase();
 
     try {
-        if (message.content.startsWith("!type ")) {
-            const text = message.content.replace("!type ", "");
-
-            // Gõ text ra ngoài màn hình thật
-            robot.typeString(text);
-            robot.keyTap("enter")
-
-            await message.reply(`✅ Đã gõ: "${text}"`);
+        // Kiểm tra xem lệnh có cần focus game không
+        if (['!start', '!stop', '!type', '!screenshot'].includes(cmd)) {
+            if (!focusTarget()) {
+                return msg.reply(`❌ Lỗi: Không tìm thấy cửa sổ game "${targetTitle}"`);
+            }
         }
 
-        if (cmd === "!start" && args[1]) {
-            const label = args[1].toUpperCase();
+        if (cmd === '!start' && label) {
             await selectAccount(label);
-            // Tick/untick
-            robot.keyTap("space");
-            await message.reply(`Đã start account ${label}`);
+            await keyboard.type(Key.Space);
+            await msg.reply(`✅ Đã nhấn START cho ${label}`);
         }
 
-        if (cmd === "!stop" && args[1]) {
-            const label = args[1].toUpperCase();
-            console.log(label);
+        else if (cmd === '!stop' && label) {
             await selectAccount(label);
-            // Tick/untick
-            robot.keyTap("space");
-            await message.reply(`Đã stop account ${label}`);
+            await keyboard.type(Key.Space);
+            await msg.reply(`🛑 Đã nhấn STOP cho ${label}`);
         }
 
-        if (cmd === "!screenshot" && args[1]) {
-            const label = args[1].toUpperCase();
+        else if (cmd === '!type') {
+            const text = msg.content.replace('!type ', '').trim();
+            await keyboard.type(text);
+            await keyboard.pressKey(Key.Enter);
+            await keyboard.releaseKey(Key.Enter);
+            await msg.reply(`⌨️ Đã gõ: ${text}`);
+        }
+
+        else if (cmd === '!screenshot' && label) {
+            if (!accounts[label]) return msg.reply(`❌ Account ${label} chưa có tọa độ trong config.`);
             const filePath = await captureAccount(label);
-            await message.reply({
-                content: `📸 Ảnh chụp màn hình của ${label}`,
-                files: [filePath],
-            });
+            await msg.reply({ content: `📸 Screenshot ${label}`, files: [filePath] });
         }
     } catch (err) {
-        console.error(err);
-        await message.reply("⚠️ Có lỗi xảy ra: " + err.message);
+        console.error("Lỗi thực thi lệnh:", err);
+        msg.reply("⚠️ Có lỗi xảy ra khi thực hiện lệnh phím.");
     }
 });
 
-client.login(TOKEN);
+app.whenReady().then(() => {
+    client.login(token).catch(err => {
+        console.error("❌ Lỗi đăng nhập Discord:", err.message);
+    });
+});
