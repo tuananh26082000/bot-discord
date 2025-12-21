@@ -79,16 +79,90 @@ async function selectAccount(label) {
 }
 
 async function captureAccount(label) {
-    const acc = accounts[label];
-    const rawPath = path.join(__dirname, `raw_${label}.png`);
-    const outPath = path.join(__dirname, `crop_${label}.png`);
+    const accConfig = accounts[label];
+    if (!accConfig || !accConfig.windowName) {
+        throw new Error(`Account ${label} chưa có tên cửa sổ trong config.`);
+    }
 
-    await screenshot({ filename: rawPath });
-    await sharp(rawPath)
-        .extract({ left: acc.x, top: acc.y, width: acc.w, height: acc.h })
-        .toFile(outPath);
+    const allWindows = windowManager.getWindows();
+    const targetWin = allWindows.find(w =>
+        w.getTitle().toLowerCase().includes(accConfig.windowName.toLowerCase())
+    );
 
-    if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath);
+    if (!targetWin) {
+        throw new Error(`Không tìm thấy cửa sổ: ${accConfig.windowName}`);
+    }
+
+    // 1. Mang cửa sổ lên trước
+    targetWin.bringToTop();
+    await new Promise(r => setTimeout(r, 800));
+
+    // 2. Lấy tọa độ Logic từ OS
+    const bounds = targetWin.getBounds();
+
+    const tempDir = app.getPath('temp');
+    const fullWinPath = path.join(tempDir, `full_win_${label}.png`);
+    const outPath = path.join(tempDir, `right_half_${label}.png`);
+
+    // 3. Chụp toàn bộ màn hình
+    await screenshot({ filename: fullWinPath });
+
+    // 4. Lấy Metadata ảnh thực tế
+    const metadata = await sharp(fullWinPath).metadata();
+    const imgW = metadata.width;
+    const imgH = metadata.height;
+
+    // 5. TÍNH SCALE FACTOR AN TOÀN (Dynamic)
+    // Thay vì dùng monitor.getBounds() dễ bị 0x0, chúng ta dùng tỷ lệ giữa
+    // ảnh chụp thực tế và kích thước màn hình logic từ nut-js hoặc electron screen
+    const { screen } = require("@nut-tree-fork/nut-js");
+    const screenWidthLogic = await screen.width();
+    const screenHeightLogic = await screen.height();
+
+    // Bảo vệ chống chia cho 0
+    const safeScreenWidth = screenWidthLogic || (imgW / 2); // Giả định factor 2 nếu lỗi
+    const safeScreenHeight = screenHeightLogic || (imgH / 2);
+
+    const scaleFactorX = imgW / safeScreenWidth;
+    const scaleFactorY = imgH / safeScreenHeight;
+
+    console.log(`[${label}] ⚙️ ScaleFactor: X:${scaleFactorX.toFixed(2)}, Y:${scaleFactorY.toFixed(2)}`);
+
+    // 6. Chuyển đổi sang Pixel thực tế
+    const realX = Math.round(bounds.x * scaleFactorX);
+    const realY = Math.round(bounds.y * scaleFactorY);
+    const realW = Math.round(bounds.width * scaleFactorX);
+    const realH = Math.round(bounds.height * scaleFactorY);
+
+    // 7. Tính vùng cắt NỬA BÊN PHẢI theo công thức của bạn
+    let left = Math.round(realX + (realW / 2));
+    let top = realY;
+    let width = Math.round(realW / 2);
+    let height = realH;
+
+    // 8. KIỂM TRA BIÊN (Cực kỳ quan trọng để tránh lỗi 1x1 hoặc Infinity)
+    left = Math.max(0, Math.min(left, imgW - 10)); // Trừa ít nhất 10px để không sát rìa
+    top = Math.max(0, Math.min(top, imgH - 10));
+
+    // Nếu width/height tính ra quá nhỏ hoặc vô lý, gán giá trị mặc định dựa trên ảnh
+    if (left + width > imgW) width = imgW - left;
+    if (top + height > imgH) height = imgH - top;
+
+    console.log(`[${label}] ✂️ Vùng cắt cuối cùng: L:${left}, T:${top}, W:${width}, H:${height} trên ảnh ${imgW}x${imgH}`);
+
+    // 9. Thực hiện cắt
+    try {
+        await sharp(fullWinPath)
+            .extract({ left, top, width, height })
+            .toFile(outPath);
+        console.log(`[${label}] ✅ Thành công!`);
+    } catch (err) {
+        console.error(`[${label}] ❌ Sharp Error:`, err.message);
+        throw err;
+    } finally {
+        if (fs.existsSync(fullWinPath)) fs.unlinkSync(fullWinPath);
+    }
+
     return outPath;
 }
 
