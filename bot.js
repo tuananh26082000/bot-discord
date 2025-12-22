@@ -78,6 +78,25 @@ async function selectAccount(label) {
     }
 }
 
+async function silentUnlink(filePath, retries = 5, delay = 1000) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            await fs.unlink(filePath);
+            console.log(`[System] 🗑️ Đã xóa file tạm thành công: ${path.basename(filePath)}`);
+            return;
+        } catch (err) {
+            if (err.code === 'EPERM' || err.code === 'EBUSY') {
+                await new Promise(r => setTimeout(r, delay));
+            } else if (err.code === 'ENOENT') {
+                return;
+            } else {
+                throw err;
+            }
+        }
+    }
+    console.warn(`[System] ⚠️ Không thể xóa file sau ${retries} lần thử: ${filePath}`);
+}
+
 async function captureAccount(label) {
     const accConfig = accounts[label];
     if (!accConfig || !accConfig.windowName) {
@@ -159,8 +178,6 @@ async function captureAccount(label) {
     } catch (err) {
         console.error(`[${label}] ❌ Sharp Error:`, err.message);
         throw err;
-    } finally {
-        if (fs.existsSync(fullWinPath)) fs.unlinkSync(fullWinPath);
     }
 
     return outPath;
@@ -214,9 +231,15 @@ client.on('messageCreate', async msg => {
         }
 
         else if (cmd === '!screenshot' && label) {
-            if (!accounts[label]) return msg.reply(`❌ Account ${label} chưa có tọa độ trong config.`);
+            if (!accounts[label]) return msg.reply(`❌ Account ${label} chưa có cấu hình.`);
+
             const filePath = await captureAccount(label);
-            await msg.reply({ content: `📸 Screenshot ${label}`, files: [filePath] });
+
+            await msg.reply({
+                content: `📸 Screenshot ${label}`,
+                files: [filePath]
+            });
+            silentUnlink(filePath).catch(e => console.error("Lỗi xóa ngầm:", e));
         }
     } catch (err) {
         console.error("Lỗi thực thi lệnh:", err);
