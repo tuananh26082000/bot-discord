@@ -186,15 +186,15 @@ async function captureAccount(label) {
 
 async function captureAdmin() {
     const targetWin = windowManager.getWindows().find(w => w.getTitle().includes(targetTitle));
+    if (!targetWin) throw new Error("Không tìm thấy cửa sổ Admin");
 
     targetWin.bringToTop();
     await new Promise(r => setTimeout(r, 800));
 
     const bounds = targetWin.getBounds();
-
     const tempDir = app.getPath('temp');
     const fullAdminPath = path.join(tempDir, `full_admin.png`);
-    const outPath = path.join(tempDir, `right_admin.png`);
+    const outPath = path.join(tempDir, `entire_admin.png`);
 
     await screenshot({ filename: fullAdminPath });
 
@@ -212,21 +212,28 @@ async function captureAdmin() {
     const scaleFactorX = imgW / safeScreenWidth;
     const scaleFactorY = imgH / safeScreenHeight;
 
-    console.log(`[Admin] ⚙️ ScaleFactor: X:${scaleFactorX.toFixed(2)}, Y:${scaleFactorY.toFixed(2)}`);
+    const left = Math.round(bounds.x * scaleFactorX);
+    const top = Math.round(bounds.y * scaleFactorY);
+    const width = Math.round(bounds.width * scaleFactorX);
+    const height = Math.round(bounds.height * scaleFactorY);
 
-    const realX = Math.round(bounds.x * scaleFactorX);
-    const realY = Math.round(bounds.y * scaleFactorY);
-    const realW = Math.round(bounds.width * scaleFactorX);
-    const realH = Math.round(bounds.height * scaleFactorY);
+    const finalLeft = Math.max(0, Math.min(left, imgW - 10));
+    const finalTop = Math.max(0, Math.min(top, imgH - 10));
+    const finalWidth = Math.min(width, imgW - finalLeft);
+    const finalHeight = Math.min(height, imgH - finalTop);
 
-    console.log(`[Admin]✂️ Vùng cắt cuối cùng: X:${realX}, Y:${realY}, W:${realW}, H:${realH} trên ảnh ${imgW}x${imgH}`);
+    console.log(`[Admin] 📸 Chụp toàn bộ cửa sổ: L:${finalLeft}, T:${finalTop}, W:${finalWidth}, H:${finalHeight}`);
 
-    // 9. Thực hiện cắt
     try {
         await sharp(fullAdminPath)
-            .extract({ realX, realY, imgW, imgH })
+            .extract({
+                left: finalLeft,
+                top: finalTop,
+                width: finalWidth,
+                height: finalHeight
+            })
             .toFile(outPath);
-        console.log(`[Admin] ✅ Thành công!`);
+        console.log(`[Admin] ✅ Chụp toàn bộ cửa sổ thành công!`);
     } catch (err) {
         console.error(`[Admin] ❌ Sharp Error:`, err.message);
         throw err;
@@ -293,10 +300,10 @@ client.on('messageCreate', async msg => {
             });
         }
 
-        else if (cmd === '!screenshot admin') {
+        else if (cmd === '!tool') {
             if (!focusTarget()) return msg.reply(`❌ Lỗi: Không tìm thấy cửa sổ game "${targetTitle}"`);
 
-            const filePath = await captureAccount(label);
+            const filePath = await captureAdmin();
 
             await msg.reply({
                 content: `📸 Screenshot Admin`,
