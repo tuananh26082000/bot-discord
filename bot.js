@@ -1,5 +1,6 @@
 const { app } = require('electron');
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { keyboard, Key, mouse, screen } = require("@nut-tree-fork/nut-js");
@@ -29,12 +30,12 @@ keyboard.config.autoDelayMs = 50;
 // 2. TẢI CẤU HÌNH (CONFIG)
 // ==========================================================
 const configPath = path.join(app.getPath('userData'), 'config.json');
-if (!fs.existsSync(configPath)) {
+if (!fsSync.existsSync(configPath)) {
     console.error('❌ Không tìm thấy file config.json');
     process.exit(1);
 }
 
-const cfg = JSON.parse(fs.readFileSync(configPath));
+const cfg = JSON.parse(fsSync.readFileSync(configPath));
 const { token, targetTitle, rows, cols, accounts } = cfg;
 const MAX = rows * cols;
 
@@ -183,6 +184,57 @@ async function captureAccount(label) {
     return outPath;
 }
 
+async function captureAdmin() {
+    const targetWin = windowManager.getWindows().find(w => w.getTitle().includes(targetTitle));
+
+    targetWin.bringToTop();
+    await new Promise(r => setTimeout(r, 800));
+
+    const bounds = targetWin.getBounds();
+
+    const tempDir = app.getPath('temp');
+    const fullAdminPath = path.join(tempDir, `full_admin.png`);
+    const outPath = path.join(tempDir, `right_admin.png`);
+
+    await screenshot({ filename: fullAdminPath });
+
+    const metadata = await sharp(fullAdminPath).metadata();
+    const imgW = metadata.width;
+    const imgH = metadata.height;
+
+    const { screen } = require("@nut-tree-fork/nut-js");
+    const screenWidthLogic = await screen.width();
+    const screenHeightLogic = await screen.height();
+
+    const safeScreenWidth = screenWidthLogic || (imgW / 2);
+    const safeScreenHeight = screenHeightLogic || (imgH / 2);
+
+    const scaleFactorX = imgW / safeScreenWidth;
+    const scaleFactorY = imgH / safeScreenHeight;
+
+    console.log(`[Admin] ⚙️ ScaleFactor: X:${scaleFactorX.toFixed(2)}, Y:${scaleFactorY.toFixed(2)}`);
+
+    const realX = Math.round(bounds.x * scaleFactorX);
+    const realY = Math.round(bounds.y * scaleFactorY);
+    const realW = Math.round(bounds.width * scaleFactorX);
+    const realH = Math.round(bounds.height * scaleFactorY);
+
+    console.log(`[Admin]✂️ Vùng cắt cuối cùng: X:${realX}, Y:${realY}, W:${realW}, H:${realH} trên ảnh ${imgW}x${imgH}`);
+
+    // 9. Thực hiện cắt
+    try {
+        await sharp(fullAdminPath)
+            .extract({ realX, realY, imgW, imgH })
+            .toFile(outPath);
+        console.log(`[Admin] ✅ Thành công!`);
+    } catch (err) {
+        console.error(`[Admin] ❌ Sharp Error:`, err.message);
+        throw err;
+    }
+
+    return outPath;
+}
+
 // ==========================================================
 // 4. KẾT NỐI DISCORD & XỬ LÝ LỆNH
 // ==========================================================
@@ -239,7 +291,17 @@ client.on('messageCreate', async msg => {
                 content: `📸 Screenshot ${label}`,
                 files: [filePath]
             });
-            silentUnlink(filePath).catch(e => console.error("Lỗi xóa ngầm:", e));
+        }
+
+        else if (cmd === '!screenshot admin') {
+            if (!focusTarget()) return msg.reply(`❌ Lỗi: Không tìm thấy cửa sổ game "${targetTitle}"`);
+
+            const filePath = await captureAccount(label);
+
+            await msg.reply({
+                content: `📸 Screenshot Admin`,
+                files: [filePath]
+            });
         }
     } catch (err) {
         console.error("Lỗi thực thi lệnh:", err);
