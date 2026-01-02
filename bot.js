@@ -124,62 +124,44 @@ async function captureAccount(label) {
     const fullWinPath = path.join(tempDir, `full_win_${label}.png`);
     const outPath = path.join(tempDir, `right_half_${label}.png`);
 
-    // 3. Chụp toàn bộ màn hình
-    await screenshot({ filename: fullWinPath });
+    // 3. Chụp toàn màn hình → Buffer (KHÔNG ghi file)
+    const imgBuffer = await screenshot({ format: 'png' });
 
-    // 4. Lấy Metadata ảnh thực tế
-    const metadata = await sharp(fullWinPath).metadata();
+    // 4. Metadata
+    const metadata = await sharp(imgBuffer).metadata();
     const imgW = metadata.width;
     const imgH = metadata.height;
 
-    // 5. TÍNH SCALE FACTOR AN TOÀN (Dynamic)
-    // Thay vì dùng monitor.getBounds() dễ bị 0x0, chúng ta dùng tỷ lệ giữa
-    // ảnh chụp thực tế và kích thước màn hình logic từ nut-js hoặc electron screen
+    // 5. Scale factor
     const { screen } = require("@nut-tree-fork/nut-js");
     const screenWidthLogic = await screen.width();
     const screenHeightLogic = await screen.height();
 
-    // Bảo vệ chống chia cho 0
-    const safeScreenWidth = screenWidthLogic || (imgW / 2); // Giả định factor 2 nếu lỗi
-    const safeScreenHeight = screenHeightLogic || (imgH / 2);
+    const scaleFactorX = imgW / screenWidthLogic;
+    const scaleFactorY = imgH / screenHeightLogic;
 
-    const scaleFactorX = imgW / safeScreenWidth;
-    const scaleFactorY = imgH / safeScreenHeight;
-
-    console.log(`[${label}] ⚙️ ScaleFactor: X:${scaleFactorX.toFixed(2)}, Y:${scaleFactorY.toFixed(2)}`);
-
-    // 6. Chuyển đổi sang Pixel thực tế
+    // 6. Bounds → pixel thật
     const realX = Math.round(bounds.x * scaleFactorX);
     const realY = Math.round(bounds.y * scaleFactorY);
     const realW = Math.round(bounds.width * scaleFactorX);
     const realH = Math.round(bounds.height * scaleFactorY);
 
-    // 7. Tính vùng cắt NỬA BÊN PHẢI theo công thức của bạn
-    let left = Math.round(realX + (realW / 2));
+    // 7. Crop nửa phải
+    let left = Math.round(realX + realW / 2);
     let top = realY;
     let width = Math.round(realW / 2);
     let height = realH;
 
-    // 8. KIỂM TRA BIÊN (Cực kỳ quan trọng để tránh lỗi 1x1 hoặc Infinity)
-    left = Math.max(0, Math.min(left, imgW - 10)); // Trừa ít nhất 10px để không sát rìa
+    // 8. Clamp biên
+    left = Math.max(0, Math.min(left, imgW - 10));
     top = Math.max(0, Math.min(top, imgH - 10));
-
-    // Nếu width/height tính ra quá nhỏ hoặc vô lý, gán giá trị mặc định dựa trên ảnh
     if (left + width > imgW) width = imgW - left;
     if (top + height > imgH) height = imgH - top;
 
-    console.log(`[${label}] ✂️ Vùng cắt cuối cùng: L:${left}, T:${top}, W:${width}, H:${height} trên ảnh ${imgW}x${imgH}`);
-
-    // 9. Thực hiện cắt
-    try {
-        await sharp(fullWinPath)
-            .extract({ left, top, width, height })
-            .toFile(outPath);
-        console.log(`[${label}] ✅ Thành công!`);
-    } catch (err) {
-        console.error(`[${label}] ❌ Sharp Error:`, err.message);
-        throw err;
-    }
+    // 9. Xuất ảnh kết quả
+    await sharp(imgBuffer)
+        .extract({ left, top, width, height })
+        .toFile(outPath);
 
     return outPath;
 }
