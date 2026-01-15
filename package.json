@@ -1,6 +1,6 @@
 {
   "name": "discord-oslink-controller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "main": "main.js",
   "scripts": {
@@ -40,7 +40,7 @@
       "icon": "rok.icns"
     },
     "asarUnpack": [
-      "**/node_modules/robotjs/**",
+      "**/node_modules/screenshot-desktop/**",
       "**/node_modules/node-window-manager/**",
       "**/*.node"
     ]
