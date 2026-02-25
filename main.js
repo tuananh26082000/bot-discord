@@ -10,8 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const { windowManager } = require('node-window-manager');
 
-const getConfigPath = () => path.join(app.getPath('userData'), 'config.json');
-
+const getConfigPath = () => path.join(__dirname, 'config.json');
 let win, bot;
 
 function createWindow() {

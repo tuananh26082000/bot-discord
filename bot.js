@@ -29,7 +29,7 @@ keyboard.config.autoDelayMs = 50;
 // ==========================================================
 // 2. TẢI CẤU HÌNH (CONFIG)
 // ==========================================================
-const configPath = path.join(app.getPath('userData'), 'config.json');
+const configPath = path.join(__dirname, 'config.json');
 if (!fsSync.existsSync(configPath)) {
     console.error('❌ Không tìm thấy file config.json');
     process.exit(1);
